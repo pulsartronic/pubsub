@@ -1,0 +1,3 @@
+[submodule "jsobs"]
+	path = jsobs
+	url = ../jsobs.git
