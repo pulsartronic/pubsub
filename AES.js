@@ -25,4 +25,4 @@ AES.GCM.prototype.decrypt = function(dataBuffer) {
 	return buffer;
 };
 
-module.exports = AES;
+export default AES;

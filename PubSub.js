@@ -7,10 +7,9 @@ const FS = require("fs");
 const WebSocketServer = require('websocket').server;
 
 // Written
-const AES = require('./AES.js');
-const JSONS = require('./jsobs/jsobs.js');
-
-const configuration = require("./configuration.js");
+import AES from './AES.js';
+import JSOBS from './jsobs/jsobs.js';
+import configuration from "./configuration.js";
 
 String.prototype.b16ToAB = function() {
 	let str = (0 == (this.length % 2)) ? this : ("0" + this);
@@ -67,16 +66,16 @@ PubSub.prototype.onrequest = async function(request) {
 			let buffer = FS.readFileSync(fileAddress);
 			let content = this.aes.decrypt(buffer);
 			let uint8Array = new Uint8Array(content);
-			let user = JSONS.deserialize(uint8Array.buffer);
+			let user = JSOBS.deserialize(uint8Array.buffer);
 			let userAES = new AES.GCM(user.key);
 			let params = URL.parse(request.resourceURL.href, true);
 			let encryptedLoginBuffer = params.query.login.b64ToAB(true);
 			let decryptedLoginBuffer = userAES.decrypt(encryptedLoginBuffer);
 			let decryptedLoginArray = new Uint8Array(decryptedLoginBuffer);
-			let login = JSONS.deserialize(decryptedLoginArray.buffer);
+			let login = JSOBS.deserialize(decryptedLoginArray.buffer);
 			if ((user.last|0) < login.date) {	
 				user.last = login.date;
-				let userArrayBuffer = JSONS.serialize(user);
+				let userArrayBuffer = JSOBS.serialize(user);
 				let userBuffer = new Buffer(userArrayBuffer);
 				let encryptedUserBuffer = this.aes.encrypt(userBuffer);
 				FS.writeFileSync(fileAddress, encryptedUserBuffer);
@@ -100,7 +99,7 @@ PubSub.prototype.onrequest = async function(request) {
 PubSub.prototype.onmessage = function(connection, e) {
 	let messageBuffer = connection.aes.decrypt(e.binaryData);
 	let uint8Array = new Uint8Array(messageBuffer);
-	let message = JSONS.deserialize(uint8Array.buffer);
+	let message = JSOBS.deserialize(uint8Array.buffer);
 	switch(message.name) {
 		case 'pub':
 			this.publish(connection, message);
@@ -148,7 +147,7 @@ PubSub.prototype.unsubscribe = function(connection, message) {
 };
 
 PubSub.prototype.publish = function(connection, message) {
-	let messageArrayBuffer = JSONS.serialize(message);
+	let messageArrayBuffer = JSOBS.serialize(message);
 	let messageBuffer = new Buffer(messageArrayBuffer);
 	let topic = this.topics[message.topic] = this.topics[message.topic] || [];
 	for (let saved of topic) {
