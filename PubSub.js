@@ -7,9 +7,9 @@ const FS = require("fs");
 const WebSocketServer = require('websocket').server;
 
 // Written
-import AES from './AES.js';
-import JSOBS from './jsobs/jsobs.js';
-import configuration from "./configuration.js";
+const AES = require('./AES.js');
+const JSOBS = require('./jsobs/jsobs.js');
+const configuration = require("./configuration.js");
 
 String.prototype.b16ToAB = function() {
 	let str = (0 == (this.length % 2)) ? this : ("0" + this);
