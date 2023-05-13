@@ -1,10 +1,10 @@
 // Built-in
-const HTTP = require('http');
-const URL = require('url');
-const FS = require("fs");
+import HTTP from 'http';
+import URL from 'url';
+import FS from "fs";
 
 // Installed
-const WebSocketServer = require('websocket').server;
+import WebSocket from 'websocket';
 
 // Written
 import AES from './AES.js';
@@ -13,7 +13,7 @@ import configuration from "./configuration.js";
 
 String.prototype.b16ToAB = function() {
 	let str = (0 == (this.length % 2)) ? this : ("0" + this);
-	let buffer = new Buffer(str.length / 2);
+	let buffer = Buffer.alloc(str.length / 2);
 	for (let j = 0; j < buffer.length; j++) {
 		let s = str.substring(2 * j, 2 * j + 2);
 		buffer[j] = parseInt(s, 16);
@@ -25,7 +25,7 @@ String.prototype.b64ToAB = function(url = false) {
 	let base64Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789' + (url ? '-_' : '+/');
 	let str = this.replace(/=/gi, "");
 	let length = Math.floor(str.length * 6 / 8);
-	let buffer = new Buffer(length);
+	let buffer = Buffer.alloc(length);
 	for (let i = 0, si = -1; i < length; i++) {
 		let m = 2 * (i % 3), e1 = 6 - m, b1 = 2**e1 - 1;
 		si += +(0 == i % 3);
@@ -50,7 +50,7 @@ let PubSub = function() {
 		console.log('Room Server is listening on port 5454');
 	});
 	
-	this.ws = new WebSocketServer({
+	this.ws = new WebSocket.server({
 		httpServer : this.http,
 		autoAcceptConnections : false
 	});
