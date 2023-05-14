@@ -1,3 +1,6 @@
 [submodule "jsobs"]
 	path = jsobs
 	url = ../jsobs.git
+[submodule "aes"]
+	path = aes
+	url = ../aes.git
