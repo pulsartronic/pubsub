@@ -4,3 +4,6 @@
 [submodule "aes"]
 	path = aes
 	url = ../aes.git
+[submodule "convert"]
+	path = convert
+	url = ../convert.git
