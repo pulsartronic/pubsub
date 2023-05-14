@@ -7,39 +7,16 @@ import FS from "fs";
 import WebSocket from 'websocket';
 
 // Written
-import AES from './AES.js';
+import AES from './aes/AES.js';
 import JSOBS from './jsobs/jsobs.js';
+import Convert from './convert/Convert.js';
 import configuration from "./configuration.js";
 
-String.prototype.b16ToAB = function() {
-	let str = (0 == (this.length % 2)) ? this : ("0" + this);
-	let buffer = Buffer.alloc(str.length / 2);
-	for (let j = 0; j < buffer.length; j++) {
-		let s = str.substring(2 * j, 2 * j + 2);
-		buffer[j] = parseInt(s, 16);
-	}
-	return buffer;
-};
-
-String.prototype.b64ToAB = function(url = false) {
-	let base64Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789' + (url ? '-_' : '+/');
-	let str = this.replace(/=/gi, "");
-	let length = Math.floor(str.length * 6 / 8);
-	let buffer = Buffer.alloc(length);
-	for (let i = 0, si = -1; i < length; i++) {
-		let m = 2 * (i % 3), e1 = 6 - m, b1 = 2**e1 - 1;
-		si += +(0 == i % 3);
-		let c = str[si], ci1 = base64Chars.indexOf(c);
-		buffer[i] = (ci1 & b1) << (2 + m);
-		let e2 = 4 - m, b2 = 63 - (2**e2 - 1), c2 = str[++si] || 'A', ci2 = base64Chars.indexOf(c2);
-		buffer[i] |= (ci2 & b2) >> (4 - m);
-	}
-	return buffer;
-};
 
 let PubSub = function() {
 	this.topics = {};
-	this.aes = new AES.GCM(configuration.key);
+	var keyBuffer = Convert.B16.toAB(configuration.key);
+	this.aes = new AES.GCM(keyBuffer);
 
 	this.http = HTTP.createServer(function(request, response) {
 		response.writeHead(404);
@@ -63,22 +40,28 @@ PubSub.prototype.onrequest = async function(request) {
 		let fileAddress = `data/${filename}`;
 		let fileExists = FS.existsSync(fileAddress);
 		if (fileExists) {
-			let buffer = FS.readFileSync(fileAddress);
-			let content = this.aes.decrypt(buffer);
-			let uint8Array = new Uint8Array(content);
-			let user = JSOBS.deserialize(uint8Array.buffer);
-			let userAES = new AES.GCM(user.key);
+			// ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+			let fileBuffer = FS.readFileSync(fileAddress);
+			var fileArrayBuffer = fileBuffer.buffer.slice(fileBuffer.byteOffset, fileBuffer.byteOffset + fileBuffer.byteLength);
+			// ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+			
+			let serializedUser = await this.aes.decrypt(fileArrayBuffer);
+			let user = JSOBS.deserialize(serializedUser);
+			let userAES =  new AES.GCM(user.key);
 			let params = URL.parse(request.resourceURL.href, true);
-			let encryptedLoginBuffer = params.query.login.b64ToAB(true);
-			let decryptedLoginBuffer = userAES.decrypt(encryptedLoginBuffer);
-			let decryptedLoginArray = new Uint8Array(decryptedLoginBuffer);
-			let login = JSOBS.deserialize(decryptedLoginArray.buffer);
+			let encryptedLoginArrayBuffer = Convert.B64.toAB(params.query.login, true);
+			let decryptedLoginArrayBuffer = await userAES.decrypt(encryptedLoginArrayBuffer);
+			let login = JSOBS.deserialize(decryptedLoginArrayBuffer);
 			if ((user.last|0) < login.date) {	
 				user.last = login.date;
 				let userArrayBuffer = JSOBS.serialize(user);
-				let userBuffer = new Buffer(userArrayBuffer);
-				let encryptedUserBuffer = this.aes.encrypt(userBuffer);
+				let encryptedUserArrayBuffer = await this.aes.encrypt(userArrayBuffer);
+				
+				// ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+				let encryptedUserBuffer = Buffer.from(encryptedUserArrayBuffer);
 				FS.writeFileSync(fileAddress, encryptedUserBuffer);
+				// ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+				
 				var connection = request.accept('data', request.origin);
 				connection.aes = userAES;
 				connection.on('message', this.onmessage.bind(this, connection));
@@ -92,17 +75,20 @@ PubSub.prototype.onrequest = async function(request) {
 	} catch (e) {
 		request.reject();
 		console.log("Service.onrequest: ");
-		console.log(e);
+		console.log(e.stack);
 	}
 };
 
-PubSub.prototype.onmessage = function(connection, e) {
-	let messageBuffer = connection.aes.decrypt(e.binaryData);
-	let uint8Array = new Uint8Array(messageBuffer);
-	let message = JSOBS.deserialize(uint8Array.buffer);
+PubSub.prototype.onmessage = async function(connection, e) {
+	// ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	var arrayBuffer = e.binaryData.buffer.slice(e.binaryData.byteOffset, e.binaryData.byteOffset + e.binaryData.byteLength);
+	// ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	
+	let messageBuffer = await connection.aes.decrypt(arrayBuffer);
+	let message = JSOBS.deserialize(messageBuffer);
 	switch(message.name) {
 		case 'pub':
-			this.publish(connection, message);
+			await this.publish(connection, message);
 			break;
 		case 'sub':
 			this.subscribe(connection, message);
@@ -146,13 +132,14 @@ PubSub.prototype.unsubscribe = function(connection, message) {
 	// TODO:: 
 };
 
-PubSub.prototype.publish = function(connection, message) {
+PubSub.prototype.publish = async function(connection, message) {
 	let messageArrayBuffer = JSOBS.serialize(message);
-	let messageBuffer = new Buffer(messageArrayBuffer);
+	let messageBuffer = Buffer.from(messageArrayBuffer);
 	let topic = this.topics[message.topic] = this.topics[message.topic] || [];
 	for (let saved of topic) {
 		if (saved != connection) {
-			let encryptedBuffer = saved.aes.encrypt(messageBuffer);
+			let encryptedArrayBuffer = await saved.aes.encrypt(messageBuffer);
+			let encryptedBuffer = Buffer.from(encryptedArrayBuffer);
 			saved.send(encryptedBuffer);
 		}
 	}
